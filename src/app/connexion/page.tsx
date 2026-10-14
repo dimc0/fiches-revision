@@ -6,7 +6,7 @@ import { creerClientServeur } from "@/lib/supabase/server";
 export default function Connexion({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string; erreur?: string }>;
+  searchParams: Promise<{ erreur?: string }>;
 }) {
   return (
     <Suspense fallback={<main className="mx-auto max-w-md p-8">Chargement…</main>}>
@@ -18,9 +18,8 @@ export default function Connexion({
 async function ContenuConnexion({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string; erreur?: string }>;
+  searchParams: Promise<{ erreur?: string }>;
 }) {
-  const { code, erreur } = await searchParams;
   const supabase = await creerClientServeur();
   const {
     data: { user },
@@ -30,6 +29,8 @@ async function ContenuConnexion({
     redirect("/");
   }
 
+  const { erreur } = await searchParams;
+
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-bold">Connexion</h1>
@@ -37,7 +38,7 @@ async function ContenuConnexion({
         Saisissez votre adresse e-mail : vous recevrez un lien pour vous connecter, sans
         mot de passe.
       </p>
-      <FormulaireConnexion code={code} erreurLien={erreur === "lien-invalide"} />
+      <FormulaireConnexion erreurLien={erreur === "lien-invalide"} />
     </main>
   );
 }

@@ -1,52 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { creerClientNavigateur } from "@/lib/supabase/client";
 
-export default function FormulaireConnexion({
-  code,
-  erreurLien,
-}: {
-  code?: string;
-  erreurLien: boolean;
-}) {
-  const router = useRouter();
-  const codeTraite = useRef(false);
+export default function FormulaireConnexion({ erreurLien }: { erreurLien: boolean }) {
   const [email, setEmail] = useState("");
   const [envoi, setEnvoi] = useState(false);
   const [envoye, setEnvoye] = useState(false);
   const [erreur, setErreur] = useState(
-    erreurLien ? "La validation du lien a échoué. Demandez-en un nouveau." : ""
+    erreurLien ? "Ce lien de connexion est invalide ou a expiré. Demandez-en un nouveau." : ""
   );
-
-  useEffect(() => {
-    const codeConnexion = code;
-    if (!codeConnexion || codeTraite.current) return;
-    codeTraite.current = true;
-    setEnvoi(true);
-
-    async function finaliserConnexion() {
-      try {
-        const supabase = creerClientNavigateur();
-        const { error } = await supabase.auth.exchangeCodeForSession(codeConnexion);
-
-        if (error) throw error;
-
-        router.replace("/");
-        router.refresh();
-      } catch (error) {
-        console.error("Échec de l'échange du code de connexion dans le navigateur :", error);
-        setErreur(
-          "Impossible de finaliser la connexion dans ce navigateur. Ouvre le lien dans celui où tu as demandé la connexion."
-        );
-      } finally {
-        setEnvoi(false);
-      }
-    }
-
-    void finaliserConnexion();
-  }, [code, router]);
 
   async function envoyer(e: React.FormEvent) {
     e.preventDefault();
@@ -77,10 +40,6 @@ export default function FormulaireConnexion({
         dans ce même navigateur.
       </p>
     );
-  }
-
-  if (code && envoi) {
-    return <p className="mt-6 text-gray-600">Connexion en cours…</p>;
   }
 
   return (
