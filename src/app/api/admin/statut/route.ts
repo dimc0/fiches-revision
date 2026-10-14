@@ -1,9 +1,22 @@
 import { CONTROLES } from "@/lib/controles";
 import { executerControle, type Statut } from "@/lib/statut";
-
-// export const dynamic = "force-dynamic";
+import { estAdministrateur } from "@/lib/admin";
+import { creerClientServeur } from "@/lib/supabase/server";
 
 export async function GET() {
+  const supabase = await creerClientServeur();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return Response.json({ erreur: "Authentification requise." }, { status: 401 });
+  }
+
+  if (!estAdministrateur(user.email)) {
+    return Response.json({ erreur: "Accès réservé aux administrateurs." }, { status: 403 });
+  }
+
   const services = await Promise.all(CONTROLES.map(executerControle));
 
   let statutGlobal: Statut = "operationnel";

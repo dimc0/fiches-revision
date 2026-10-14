@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import AffichageFiche from "@/components/AffichageFiche";
 import type { FicheEnregistree } from "@/lib/fiche";
-import { creerClientSupabase } from "@/lib/supabase";
+import { creerClientServeur } from "@/lib/supabase/server";
 
 export default function DetailFiche({ params }: {
   params: Promise<{ id: string }>;
@@ -22,7 +22,7 @@ async function ContenuDetailFiche({
 }) {
   const { id } = await params;
 
-  const supabase = creerClientSupabase();
+  const supabase = await creerClientServeur();
   const { data: fiche } = await supabase
     .from("fiches")
     .select("id, titre, synthese, questions, created_at")

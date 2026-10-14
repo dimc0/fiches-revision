@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
+import EnTete from "@/components/EnTete";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -9,7 +11,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="fr" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Suspense fallback={null}>
+          <EnTete />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }

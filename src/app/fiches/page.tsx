@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { creerClientSupabase } from "@/lib/supabase";
+import { creerClientServeur } from "@/lib/supabase/server";
 
 export default function ListeFiches() {
   return (
@@ -13,7 +13,7 @@ export default function ListeFiches() {
 
 async function ContenuListeFiches() {
   await connection();
-  const supabase = creerClientSupabase();
+  const supabase = await creerClientServeur();
   const { data: fiches, error } = await supabase
     .from("fiches")
     .select("id, titre, created_at")
