@@ -9,6 +9,8 @@ import { creerClientNavigateur } from "@/lib/supabase/client";
 type Mode = "texte" | "pdf";
 
 const TAILLE_MAX_PDF = 5 * 1024 * 1024;
+const INTERVALLE_MS = 2000;
+const VERIFICATIONS_MAX = 45;
 
 async function deposerPdf(fichier: File): Promise<string> {
   const supabase = creerClientNavigateur();
@@ -31,6 +33,26 @@ async function deposerPdf(fichier: File): Promise<string> {
   }
 
   return chemin;
+}
+
+// Interroge régulièrement le back jusqu'à ce que la fiche soit prête ou en erreur.
+async function attendreFiche(id: string): Promise<FicheEnregistree> {
+  for (let i = 0; i < VERIFICATIONS_MAX; i++) {
+    await new Promise((resolve) => setTimeout(resolve, INTERVALLE_MS));
+
+    const reponse = await fetch(`/api/fiches/${id}`, { cache: "no-store" });
+    if (!reponse.ok) continue;
+
+    const fiche: FicheEnregistree = await reponse.json();
+    if (fiche.statut === "prete") return fiche;
+    if (fiche.statut === "erreur") {
+      throw new Error(fiche.message_erreur ?? "La génération de la fiche a échoué.");
+    }
+  }
+
+  throw new Error(
+    "La génération prend plus de temps que prévu. Votre fiche apparaîtra dans « Mes fiches » dès qu'elle sera prête."
+  );
 }
 
 export default function FormulaireFiche() {
@@ -71,7 +93,7 @@ export default function FormulaireFiche() {
         corps = { titre, texte };
       }
 
-      setEtape("Génération en cours…");
+      setEtape("Enregistrement de la demande…");
       const reponse = await fetch("/api/fiches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,11 +108,15 @@ export default function FormulaireFiche() {
         return;
       }
 
-      setFiche(donnees);
+      // La demande est acceptée : on vide le formulaire et on attend la fiche.
       setTitre("");
       setTexte("");
       setFichier(null);
       setCleFichier((cle) => cle + 1);
+
+      setEtape("Génération en arrière-plan…");
+      const ficheTerminee = await attendreFiche(donnees.id);
+      setFiche(ficheTerminee);
     } catch (err) {
       setErreur(
         err instanceof TypeError
@@ -194,6 +220,14 @@ export default function FormulaireFiche() {
         >
           {chargement ? etape : "Générer la fiche"}
         </button>
+
+        {chargement && etape === "Génération en arrière-plan…" && (
+          <p className="text-sm text-gray-500">
+            Vous pouvez quitter cette page : la fiche apparaîtra dans « Mes fiches » dès
+            qu'elle sera prête.
+          </p>
+        )}
+
         {restantes !== null && (
           <p className="text-sm text-gray-500">
             {restantes > 0
