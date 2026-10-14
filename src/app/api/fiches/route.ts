@@ -1,6 +1,7 @@
 import { LIMITES } from "@/lib/fiche";
 import { genererFiche } from "@/lib/generer-fiche";
 import { ErreurIA } from "@/lib/ia";
+import { limiteurGenerations } from "@/lib/limitation";
 import { extraireTextePdf } from "@/lib/pdf";
 import { creerClientServeur } from "@/lib/supabase/server";
 
@@ -69,7 +70,33 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2. Génération de la fiche par le modèle d'IA
+  // 2. Vérification du quota de l'utilisateur
+  const enTetesQuota: Record<string, string> = {};
+
+  try {
+    const quota = await limiteurGenerations.limit(user.id);
+
+    enTetesQuota["X-RateLimit-Limit"] = String(quota.limit);
+    enTetesQuota["X-RateLimit-Remaining"] = String(quota.remaining);
+
+    if (!quota.success) {
+      const secondes = Math.max(1, Math.ceil((quota.reset - Date.now()) / 1000));
+      const minutes = Math.ceil(secondes / 60);
+
+      return Response.json(
+        {
+          erreur: `Vous avez atteint votre quota de ${quota.limit} fiches par heure. Réessayez dans ${minutes} minute(s).`,
+        },
+        { status: 429, headers: { ...enTetesQuota, "Retry-After": String(secondes) } }
+      );
+    }
+  } catch (erreur) {
+    // Si Redis est indisponible, on laisse passer la requête plutôt que de bloquer
+    // tous les utilisateurs : c'est un choix « fail open ».
+    console.error("Limitation de débit indisponible :", erreur);
+  }
+
+  // 3. Génération de la fiche par le modèle d'IA
   let fiche;
   try {
     fiche = await genererFiche(titre, texte);
@@ -77,7 +104,7 @@ export async function POST(request: Request) {
     return reponseErreurIA(erreur);
   }
 
-  // 3. Enregistrement de la fiche, au nom de l'utilisateur connecté
+  // 4. Enregistrement de la fiche, au nom de l'utilisateur connecté
   try {
     const { data, error } = await supabase
       .from("fiches")
@@ -94,7 +121,7 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    return Response.json(data, { status: 201 });
+    return Response.json(data, { status: 201, headers: enTetesQuota });
   } catch (erreur) {
     console.error("Erreur lors de l'enregistrement de la fiche :", erreur);
     return Response.json(

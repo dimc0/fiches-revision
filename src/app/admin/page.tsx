@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import TableauStatut from "@/components/TableauStatut";
 import { estAdministrateur } from "@/lib/admin";
 import { creerClientServeur } from "@/lib/supabase/server";
@@ -13,6 +14,8 @@ export default function Admin() {
 }
 
 async function AdminProtege() {
+  await connection();
+
   const supabase = await creerClientServeur();
   const {
     data: { user },

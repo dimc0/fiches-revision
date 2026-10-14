@@ -43,6 +43,7 @@ export default function FormulaireFiche() {
   const [etape, setEtape] = useState("");
   const [erreur, setErreur] = useState("");
   const [fiche, setFiche] = useState<FicheEnregistree | null>(null);
+  const [restantes, setRestantes] = useState<number | null>(null);
 
   const texteValide =
     texte.length >= LIMITES.texteMin && texte.length <= LIMITES.texteMax;
@@ -77,6 +78,8 @@ export default function FormulaireFiche() {
         body: JSON.stringify(corps),
       });
       const donnees = await reponse.json();
+      const entete = reponse.headers.get("X-RateLimit-Remaining");
+      if (entete !== null) setRestantes(Number(entete));
 
       if (!reponse.ok) {
         setErreur(donnees.erreur ?? "Une erreur est survenue.");
@@ -191,6 +194,13 @@ export default function FormulaireFiche() {
         >
           {chargement ? etape : "Générer la fiche"}
         </button>
+        {restantes !== null && (
+          <p className="text-sm text-gray-500">
+            {restantes > 0
+              ? `Il vous reste ${restantes} génération(s) pour l'heure en cours.`
+              : "Vous avez utilisé tout votre quota pour l'heure en cours."}
+          </p>
+        )}
       </form>
 
       {erreur && (
