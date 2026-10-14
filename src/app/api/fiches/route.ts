@@ -1,6 +1,7 @@
 import { LIMITES } from "@/lib/fiche";
 import { genererFiche } from "@/lib/generer-fiche";
 import { ErreurIA } from "@/lib/ia";
+import { extraireTextePdf } from "@/lib/pdf";
 import { creerClientServeur } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -19,7 +20,6 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const titre = typeof body.titre === "string" ? body.titre.trim() : "";
-  const texte = typeof body.texte === "string" ? body.texte.trim() : "";
 
   if (!titre || titre.length > LIMITES.titreMax) {
     return Response.json(
@@ -28,16 +28,48 @@ export async function POST(request: Request) {
     );
   }
 
+  // 1. Récupération du texte : saisi directement ou extrait d'un PDF
+  let texte: string;
+  let cheminFichier: string | null = null;
+
+  if (typeof body.cheminFichier === "string") {
+    const chemin: string = body.cheminFichier;
+
+    if (!chemin.startsWith(`${user.id}/`) || !chemin.endsWith(".pdf")) {
+      return Response.json({ erreur: "Fichier invalide." }, { status: 400 });
+    }
+
+    cheminFichier = chemin;
+
+    try {
+      texte = await extraireTextePdf(supabase, chemin);
+    } catch (erreur) {
+      console.error("Erreur lors de la lecture du PDF :", erreur);
+      return Response.json(
+        { erreur: "Impossible de lire ce PDF. Vérifiez qu'il n'est pas endommagé." },
+        { status: 422 }
+      );
+    }
+  } else {
+    texte = typeof body.texte === "string" ? body.texte.trim() : "";
+  }
+
   if (texte.length < LIMITES.texteMin || texte.length > LIMITES.texteMax) {
+    const origine = cheminFichier ? "Le texte extrait du PDF" : "Le texte";
+    const conseil =
+      cheminFichier && texte.length < LIMITES.texteMin
+        ? " S'il s'agit d'un document scanné, il ne contient pas de texte lisible."
+        : "";
+
     return Response.json(
       {
-        erreur: `Le texte doit contenir entre ${LIMITES.texteMin} et ${LIMITES.texteMax} caractères.`,
+        erreur: `${origine} doit contenir entre ${LIMITES.texteMin} et ${LIMITES.texteMax} caractères (actuellement ${texte.length}).${conseil}`,
       },
       { status: 400 }
     );
   }
 
-  // 1. Génération de la fiche par le modèle d'IA
+  // 2. Génération de la fiche par le modèle d'IA
   let fiche;
   try {
     fiche = await genererFiche(titre, texte);
@@ -45,7 +77,7 @@ export async function POST(request: Request) {
     return reponseErreurIA(erreur);
   }
 
-  // 2. Enregistrement de la fiche, au nom de l'utilisateur connecté
+  // 3. Enregistrement de la fiche, au nom de l'utilisateur connecté
   try {
     const { data, error } = await supabase
       .from("fiches")
@@ -55,6 +87,7 @@ export async function POST(request: Request) {
         synthese: fiche.synthese,
         questions: fiche.questions,
         modele: process.env.AI_MODEL,
+        fichier_chemin: cheminFichier,
       })
       .select("id, titre, synthese, questions, created_at")
       .single();

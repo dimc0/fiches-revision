@@ -79,4 +79,33 @@ const controleAuth: Controle = {
   },
 };
 
-export const CONTROLES: Controle[] = [controleVercel, controleIA, controleBase, controleAuth];
+const controleStockage: Controle = {
+  service: "Supabase Storage",
+  description: "Stockage des cours en PDF",
+  verifier: async () => {
+    const supabase = creerClientAdmin();
+    const { data, error } = await supabase.storage.getBucket("cours");
+
+    if (error || !data) {
+      throw new Error(error?.message ?? "Bucket « cours » introuvable");
+    }
+
+    if (data.public) {
+      throw new Error("Le bucket « cours » est public : les cours sont exposés à tous");
+    }
+
+    const limiteMo = data.file_size_limit
+      ? `${Math.round(data.file_size_limit / 1024 / 1024)} Mo`
+      : "aucune";
+
+    return `Bucket « cours » privé · Taille maximale : ${limiteMo}`;
+  },
+};
+
+export const CONTROLES: Controle[] = [
+  controleVercel,
+  controleIA,
+  controleBase,
+  controleAuth,
+  controleStockage,
+];
