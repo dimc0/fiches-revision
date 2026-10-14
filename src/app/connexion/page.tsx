@@ -6,7 +6,7 @@ import { creerClientServeur } from "@/lib/supabase/server";
 export default function Connexion({
   searchParams,
 }: {
-  searchParams: Promise<{ erreur?: string }>;
+  searchParams: Promise<{ code?: string; erreur?: string }>;
 }) {
   return (
     <Suspense fallback={<main className="mx-auto max-w-md p-8">Chargement…</main>}>
@@ -18,9 +18,21 @@ export default function Connexion({
 async function ContenuConnexion({
   searchParams,
 }: {
-  searchParams: Promise<{ erreur?: string }>;
+  searchParams: Promise<{ code?: string; erreur?: string }>;
 }) {
+  const { code, erreur } = await searchParams;
   const supabase = await creerClientServeur();
+
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      redirect("/");
+    }
+
+    console.error("Échec de l'échange du code de connexion sur /connexion :", error);
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -29,8 +41,6 @@ async function ContenuConnexion({
     redirect("/");
   }
 
-  const { erreur } = await searchParams;
-
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-bold">Connexion</h1>
@@ -38,7 +48,7 @@ async function ContenuConnexion({
         Saisissez votre adresse e-mail : vous recevrez un lien pour vous connecter, sans
         mot de passe.
       </p>
-      <FormulaireConnexion erreurLien={erreur === "lien-invalide"} />
+      <FormulaireConnexion erreurLien={erreur === "lien-invalide" || Boolean(code)} />
     </main>
   );
 }
