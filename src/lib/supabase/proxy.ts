@@ -4,17 +4,6 @@ import { NextResponse, type NextRequest } from "next/server";
 const CHEMINS_PUBLICS = ["/connexion", "/auth", "/api"];
 
 export async function mettreAJourSession(request: NextRequest) {
-  // Si Supabase renvoie le code de connexion à la page par défaut, transfère-le
-  // au callback qui peut l'échanger et écrire la session dans les cookies.
-  if (
-    request.nextUrl.pathname === "/connexion" &&
-    request.nextUrl.searchParams.has("code")
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/auth/callback";
-    return NextResponse.redirect(url);
-  }
-
   let reponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
