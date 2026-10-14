@@ -22,17 +22,6 @@ async function ContenuConnexion({
 }) {
   const { code, erreur } = await searchParams;
   const supabase = await creerClientServeur();
-
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (!error) {
-      redirect("/");
-    }
-
-    console.error("Échec de l'échange du code de connexion sur /connexion :", error);
-  }
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -48,7 +37,7 @@ async function ContenuConnexion({
         Saisissez votre adresse e-mail : vous recevrez un lien pour vous connecter, sans
         mot de passe.
       </p>
-      <FormulaireConnexion erreurLien={erreur === "lien-invalide" || Boolean(code)} />
+      <FormulaireConnexion code={code} erreurLien={erreur === "lien-invalide"} />
     </main>
   );
 }
