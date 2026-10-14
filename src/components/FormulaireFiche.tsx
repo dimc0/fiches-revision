@@ -9,8 +9,7 @@ import { creerClientNavigateur } from "@/lib/supabase/client";
 type Mode = "texte" | "pdf";
 
 const TAILLE_MAX_PDF = 5 * 1024 * 1024;
-const INTERVALLE_MS = 2000;
-const VERIFICATIONS_MAX = 45;
+const DELAI_MAX_MS = 90000;
 
 async function deposerPdf(fichier: File): Promise<string> {
   const supabase = creerClientNavigateur();
@@ -35,24 +34,73 @@ async function deposerPdf(fichier: File): Promise<string> {
   return chemin;
 }
 
-// Interroge régulièrement le back jusqu'à ce que la fiche soit prête ou en erreur.
+// S'abonne aux changements de la fiche et attend qu'elle soit prête ou en erreur
 async function attendreFiche(id: string): Promise<FicheEnregistree> {
-  for (let i = 0; i < VERIFICATIONS_MAX; i++) {
-    await new Promise((resolve) => setTimeout(resolve, INTERVALLE_MS));
+  const supabase = creerClientNavigateur();
 
-    const reponse = await fetch(`/api/fiches/${id}`, { cache: "no-store" });
-    if (!reponse.ok) continue;
+  // Charge la session : l'abonnement doit être fait au nom de l'utilisateur,
+  // pour que la Row Level Security autorise la réception des événements
+  await supabase.auth.getSession();
 
-    const fiche: FicheEnregistree = await reponse.json();
-    if (fiche.statut === "prete") return fiche;
-    if (fiche.statut === "erreur") {
-      throw new Error(fiche.message_erreur ?? "La génération de la fiche a échoué.");
+  return new Promise((resolve, reject) => {
+    const canal = supabase.channel(`fiche-${id}`);
+    let termine = false;
+    let minuteur: ReturnType<typeof setTimeout> | undefined;
+
+    function terminer(action: () => void) {
+      if (termine) return;
+      termine = true;
+      clearTimeout(minuteur);
+      supabase.removeChannel(canal);
+      action();
     }
-  }
 
-  throw new Error(
-    "La génération prend plus de temps que prévu. Votre fiche apparaîtra dans « Mes fiches » dès qu'elle sera prête."
-  );
+    function examiner(fiche: FicheEnregistree) {
+      if (fiche.statut === "prete") {
+        terminer(() => resolve(fiche));
+      } else if (fiche.statut === "erreur") {
+        terminer(() =>
+          reject(new Error(fiche.message_erreur ?? "La génération de la fiche a échoué."))
+        );
+      }
+    }
+
+    minuteur = setTimeout(
+      () =>
+        terminer(() =>
+          reject(
+            new Error(
+              "La génération prend plus de temps que prévu. Votre fiche apparaîtra dans « Mes fiches » dès qu'elle sera prête."
+            )
+          )
+        ),
+      DELAI_MAX_MS
+    );
+
+    canal
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "fiches", filter: `id=eq.${id}` },
+        (evenement) => examiner(evenement.new as FicheEnregistree)
+      )
+      .subscribe(async (statut) => {
+        if (statut === "SUBSCRIBED") {
+          // La génération a pu se terminer avant l'abonnement : on vérifie une fois l'état actuel
+          const reponse = await fetch(`/api/fiches/${id}`, { cache: "no-store" });
+          if (reponse.ok) examiner(await reponse.json());
+        }
+
+        if (statut === "CHANNEL_ERROR" || statut === "TIMED_OUT") {
+          terminer(() =>
+            reject(
+              new Error(
+                "La connexion en temps réel a échoué. Votre fiche apparaîtra dans « Mes fiches » dès qu'elle sera prête."
+              )
+            )
+          );
+        }
+      });
+  });
 }
 
 export default function FormulaireFiche() {
@@ -100,6 +148,7 @@ export default function FormulaireFiche() {
         body: JSON.stringify(corps),
       });
       const donnees = await reponse.json();
+
       const entete = reponse.headers.get("X-RateLimit-Remaining");
       if (entete !== null) setRestantes(Number(entete));
 
@@ -108,7 +157,7 @@ export default function FormulaireFiche() {
         return;
       }
 
-      // La demande est acceptée : on vide le formulaire et on attend la fiche.
+      // La demande est acceptée : on vide le formulaire et on attend la fiche
       setTitre("");
       setTexte("");
       setFichier(null);
