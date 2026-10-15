@@ -49,7 +49,7 @@ const controleIA: Controle = {
   },
 };
 
-const controleBase: Controle = {
+export const controleBase: Controle = {
   service: "Supabase Database",
   description: "Base de données des fiches",
   verifier: async () => {
